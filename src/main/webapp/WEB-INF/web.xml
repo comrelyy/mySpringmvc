@@ -8,10 +8,10 @@
   <servlet>
     <servlet-name>reDispatcherServlet</servlet-name>
     <servlet-class>cn.relyy.servlet.ReDispatcherServlet</servlet-class>
-    <!--<init-param>-->
-      <!--<param-name>contextConfigLocation</param-name>-->
-      <!--<param-value>classpath:application.properties</param-value>-->
-    <!--</init-param>-->
+    <init-param>
+      <param-name>contextConfigLocation</param-name>
+      <param-value>classpath:application.properties</param-value>
+    </init-param>
   </servlet>
   
   <servlet-mapping>

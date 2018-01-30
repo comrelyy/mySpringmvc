@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * @author cairuirui
  * @create 2018-01-24
  */
-@Target(ElementType.TYPE_PARAMETER)
+@Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ReRequestParam {
     /**
