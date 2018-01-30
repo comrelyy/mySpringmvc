@@ -1,5 +1,9 @@
 package cn.relyy.servlet;
 
+import cn.relyy.annotation.ReAutoWired;
+import cn.relyy.annotation.ReController;
+import org.apache.commons.collections.CollectionUtils;
+
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -8,9 +12,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Set;
+import java.net.URL;
+import java.util.*;
 
 /**
  * 自定义一个前端控制器
@@ -24,6 +27,8 @@ public class ReDispatcherServlet extends HttpServlet {
 
     private Set<String> classNameSet = new HashSet<String>();
 
+    public static Map<String,Object> ioc = new HashMap<String,Object>();
+
     @Override
     public void init(ServletConfig config) throws ServletException {
         System.out.println("servlet初始化开始-------------");
@@ -34,7 +39,7 @@ public class ReDispatcherServlet extends HttpServlet {
         /**初始化所有相关的类，扫描用户指定包下所有的类**/
         doScanner(p.getProperty("scannerPage"));
 
-        /**将说有的bean放入IOC容器中**/
+        /**将所有的bean放入IOC容器中**/
         doInstance();
         /**实现依赖注入**/
         doReAutoWired();
@@ -74,25 +79,49 @@ public class ReDispatcherServlet extends HttpServlet {
     }
 
     private void doScanner(String packageName) {
-        String packageDir = packageName.replaceAll(".","/");
-        System.out.println(packageDir);
-        File packageUrl = new File(packageDir);
-        if (packageUrl.exists()){
-            if (packageUrl.isDirectory()) {
-                File[] files = packageUrl.listFiles();
-            }else {
 
+        //扫描配置的包名，获取该包下所有的类
+        URL url = this.getClass().getClassLoader().getResource("/" + packageName.replaceAll("\\.", "/"));
+        File dir = new File(url.getFile());
+        for (File file : dir.listFiles()) {
+            if (file.isDirectory()){
+                this.doScanner(packageName + "." + file.getName());
+            }else {
+                String className = packageName + "." + file.getName().replace(".class","");
+                classNameSet.add(className);
             }
         }
-
     }
 
     private void doInstance() {
+        if (CollectionUtils.isNotEmpty(classNameSet)){
+            return;
+        }
+
+        for (String className : classNameSet) {
+            try{
+                Class<?> clazz = Class.forName(className);
+                if (clazz.isAnnotationPresent(ReController.class)){
+                    String beanName = toLowFirstChar(clazz.getSimpleName());
+                }else if(clazz.isAnnotationPresent(ReAutoWired.class)){
+
+                }else {
+                    continue;
+                }
+            }catch(Exception e){
+                e.printStackTrace();
+            }
+        }
     }
+
 
     private void doReAutoWired() {
     }
 
     private void initHandlerMapping() {
+    }
+
+    private String toLowFirstChar(String simpleName) {
+        return null;
     }
 }
