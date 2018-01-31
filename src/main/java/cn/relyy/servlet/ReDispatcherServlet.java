@@ -3,6 +3,7 @@ package cn.relyy.servlet;
 import cn.relyy.annotation.ReAutoWired;
 import cn.relyy.annotation.ReController;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -12,6 +13,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.util.*;
 
@@ -116,6 +118,31 @@ public class ReDispatcherServlet extends HttpServlet {
 
 
     private void doReAutoWired() {
+        
+        if(MapUtils.isEmpty(ioc)){
+            return;
+        }
+
+        for (Map.Entry<String, Object> entry : ioc.entrySet()) {
+
+            Field[] fields = entry.getValue().getClass().getDeclaredFields();
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(ReAutoWired.class)) {
+                    ReAutoWired autoWired = field.getAnnotation(ReAutoWired.class);
+                    String beanName = autoWired.value();
+                    if ("" != beanName) {
+                        beanName = field.getName();
+                    }
+                    //允许修改私用成员变量的值
+                    field.setAccessible(true);
+                    try {
+                        field.set(field.getName(),ioc.get(beanName));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
     }
 
     private void initHandlerMapping() {

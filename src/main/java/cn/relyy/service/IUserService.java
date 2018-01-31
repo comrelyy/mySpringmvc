@@ -8,5 +8,5 @@ package cn.relyy.service;
  */
 public interface IUserService {
 
-    boolean checkUserInfo(String name,String pwd);
+    public boolean checkUserInfo(String name,String pwd);
 }

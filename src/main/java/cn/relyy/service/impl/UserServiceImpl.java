@@ -11,6 +11,7 @@ import cn.relyy.service.IUserService;
  */
 @ReService("userService")
 public class UserServiceImpl implements IUserService {
+
     @Override
     public boolean checkUserInfo(String name, String pwd) {
         return false;
