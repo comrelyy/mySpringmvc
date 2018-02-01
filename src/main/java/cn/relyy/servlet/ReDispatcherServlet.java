@@ -66,23 +66,23 @@ public class ReDispatcherServlet extends HttpServlet {
             resp.setContentType("application/json;charset=utf-8");
 
             String uri  = req.getRequestURI().toString(); //访问路径 不包含ip
-            System.out.println("uri=========="+uri);
 //            String requestURL = req.getRequestURL().toString();//访问路径 包含ip
-//            System.out.println("requestURL=========="+requestURL);
-            String contextPath = req.getContextPath();
-            System.out.println("contextPath=========="+contextPath);//项目根路径
-
+            String contextPath = req.getContextPath();//项目根路径
+            //去掉根路径
             String handleUrl = uri.replace(contextPath,"");
-            System.out.println("handleUrl=========="+handleUrl);
+
             if (!urlMapping.containsKey(handleUrl)){
                 resp.getWriter().print("404,请求url有误，请检查！");
                 return;
             }
             MethodModel methodModel = (MethodModel) urlMapping.get(handleUrl);
+            //获取请求url对应的方法
             Method method = methodModel.getMethod();
+            //获取请求url对应的controller
             Object controller = methodModel.getController();
+            //获取参数列表
             Map<String,ParamModel> paramMap = methodModel.getParamMap();
-
+            //获取参数值
             Object[] paramObject = getParamValueObj(req, paramMap);
 
             Object result = null;
@@ -96,9 +96,7 @@ public class ReDispatcherServlet extends HttpServlet {
             json.setSuccessValue(result);
             resp.getWriter().print(json);
         }catch(IllegalArgumentException e1){
-            Json json = new Json();
-            json.setExceptionValue(e1.getMessage(),e1);
-            resp.getWriter().print(json);
+            resp.getWriter().print(e1.getMessage());
         }catch(Exception e){
             e.printStackTrace();
         }
@@ -111,6 +109,7 @@ public class ReDispatcherServlet extends HttpServlet {
      */
     private void doLoadConfig(String location) {
 
+        //读取配置文件
         InputStream in = this.getClass().getClassLoader().getResourceAsStream(location.split(":")[1]);
         try{
             p.load(in);
@@ -125,8 +124,6 @@ public class ReDispatcherServlet extends HttpServlet {
                 e.printStackTrace();
             }
         }
-
-
     }
 
     /**
@@ -155,10 +152,8 @@ public class ReDispatcherServlet extends HttpServlet {
         if (CollectionUtils.isEmpty(classNameSet)){
             return;
         }
-
         for (String className : classNameSet) {
             try{
-
                 Class<?> clazz = Class.forName(className);
                 //forName方法会触发static方法，没有loadClass()方法干净
                 //Class<?> clazz = Class.class.getClassLoader().loadClass(className);
@@ -182,7 +177,6 @@ public class ReDispatcherServlet extends HttpServlet {
                     for (Class<?> interfaceName : interfaces) {
                         ioc.put(toLowFirstChar(interfaceName.getSimpleName().substring(1)), instance);
                     }
-
                 }else {
                     continue;
                 }
@@ -196,11 +190,9 @@ public class ReDispatcherServlet extends HttpServlet {
      * 注入对象
      */
     private void doReAutoWired() {
-
         if(MapUtils.isEmpty(ioc)){
             return;
         }
-
         for (Map.Entry<String, Object> entry : ioc.entrySet()) {
 
             Field[] fields = entry.getValue().getClass().getDeclaredFields();
@@ -223,14 +215,12 @@ public class ReDispatcherServlet extends HttpServlet {
                 }
             }
         }
-
     }
 
     private void initHandlerMapping() {
         if (ioc.isEmpty()){
             return;
         }
-
         for (Map.Entry<String, Object> entry : ioc.entrySet()) {
             Class<?> clazz = entry.getValue().getClass();
             if (!clazz.isAnnotationPresent(ReRequestMapping.class)){
@@ -282,7 +272,6 @@ public class ReDispatcherServlet extends HttpServlet {
                     }else {
                         paramModelMap.put(value,paramModel);
                     }
-
                 }else {
                     continue;
                 }
@@ -302,7 +291,7 @@ public class ReDispatcherServlet extends HttpServlet {
             String key = entry.getKey();
             ParamModel paramModel = entry.getValue();
             boolean required = paramModel.getRequired();
-            if (required && !parameterMap.containsKey(required)){
+            if (required && !parameterMap.containsKey(key)){
                 throw new IllegalArgumentException("缺少必要参数");
             }
             paramObject[index] = req.getParameterValues(key)[0];
