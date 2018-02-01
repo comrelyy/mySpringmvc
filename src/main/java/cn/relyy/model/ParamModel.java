@@ -42,6 +42,9 @@ public class ParamModel {
         this.alisName = alisName;
     }
 
+    public Boolean getRequired() {
+        return required;
+    }
 
     public void setRequired(Boolean required) {
         this.required = required;

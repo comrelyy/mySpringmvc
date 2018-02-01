@@ -82,25 +82,22 @@ public class ReDispatcherServlet extends HttpServlet {
             Method method = methodModel.getMethod();
             Object controller = methodModel.getController();
             Map<String,ParamModel> paramMap = methodModel.getParamMap();
-            Map parameterMap = req.getParameterMap();
 
-            Object[] paramObject = new Object[paramMap.size()];
-            int index = 0;
-            for (Map.Entry<String, ParamModel> entry : paramMap.entrySet()) {
-                String key = entry.getKey();
-                ParamModel paramModel = entry.getValue();
-                paramObject[index++] = parameterMap.get(key);
-            }
+            Object[] paramObject = getParamValueObj(req, paramMap);
 
             Object result = null;
-            if (MapUtils.isNotEmpty(parameterMap)){
-                result = method.invoke(controller,parameterMap.get("name"),parameterMap.get("pwd"));
+            if (MapUtils.isNotEmpty(paramMap)){
+                result = method.invoke(controller,paramObject);
             }else {
                 result = method.invoke(controller);
             }
 
             Json json = new Json();
             json.setSuccessValue(result);
+            resp.getWriter().print(json);
+        }catch(IllegalArgumentException e1){
+            Json json = new Json();
+            json.setExceptionValue(e1.getMessage(),e1);
             resp.getWriter().print(json);
         }catch(Exception e){
             e.printStackTrace();
@@ -293,6 +290,25 @@ public class ReDispatcherServlet extends HttpServlet {
         }
 
         return paramModelMap;
+    }
+
+    private Object[] getParamValueObj(HttpServletRequest req, Map<String, ParamModel> paramMap)
+            throws IllegalArgumentException{
+        Object[] paramObject = new Object[paramMap.size()];
+
+        Map parameterMap = req.getParameterMap();
+        int index = 0;
+        for (Map.Entry<String, ParamModel> entry : paramMap.entrySet()) {
+            String key = entry.getKey();
+            ParamModel paramModel = entry.getValue();
+            boolean required = paramModel.getRequired();
+            if (required && !parameterMap.containsKey(required)){
+                throw new IllegalArgumentException("缺少必要参数");
+            }
+            paramObject[index] = req.getParameterValues(key)[0];
+            index++;
+        }
+        return paramObject;
     }
 
     /**
