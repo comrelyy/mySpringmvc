@@ -19,10 +19,11 @@ public class UserController {
     private IUserService userService;
 
     @ReRequestMapping("/checkuserInfo")
-    public String checkuserInfo(@ReRequestParam("name") String name,
-                                @ReRequestParam("pwd") String pwd){
+    public String checkuserInfo(String name, String pwd){
 
-
+        System.out.println("找到了/checkuserInfo");
+        System.out.println("name========="+name);
+        System.out.println("pwd========="+pwd);
 
         return String.valueOf(userService.checkUserInfo(name,pwd));
     }

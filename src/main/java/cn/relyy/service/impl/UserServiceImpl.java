@@ -14,6 +14,7 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     public boolean checkUserInfo(String name, String pwd) {
+        System.out.println("进入了service");
         return false;
     }
 }

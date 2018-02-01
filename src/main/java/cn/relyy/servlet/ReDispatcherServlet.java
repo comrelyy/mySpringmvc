@@ -1,7 +1,9 @@
 package cn.relyy.servlet;
 
-import cn.relyy.annotation.ReAutoWired;
-import cn.relyy.annotation.ReController;
+import cn.relyy.annotation.*;
+import cn.relyy.model.Json;
+import cn.relyy.model.MethodModel;
+import cn.relyy.model.ParamModel;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 
@@ -14,6 +16,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.*;
 
@@ -29,7 +33,9 @@ public class ReDispatcherServlet extends HttpServlet {
 
     private Set<String> classNameSet = new HashSet<String>();
 
-    public static Map<String,Object> ioc = new HashMap<String,Object>();
+    public Map<String,Object> ioc = new HashMap<String,Object>();
+
+    public Map<String,MethodModel> urlMapping = new HashMap<String,MethodModel>();
 
     @Override
     public void init(ServletConfig config) throws ServletException {
@@ -56,10 +62,56 @@ public class ReDispatcherServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        super.doPost(req, resp);
+        try{
+            resp.setContentType("application/json;charset=utf-8");
+
+            String uri  = req.getRequestURI().toString(); //访问路径 不包含ip
+            System.out.println("uri=========="+uri);
+//            String requestURL = req.getRequestURL().toString();//访问路径 包含ip
+//            System.out.println("requestURL=========="+requestURL);
+            String contextPath = req.getContextPath();
+            System.out.println("contextPath=========="+contextPath);//项目根路径
+
+            String handleUrl = uri.replace(contextPath,"");
+            System.out.println("handleUrl=========="+handleUrl);
+            if (!urlMapping.containsKey(handleUrl)){
+                resp.getWriter().print("404,请求url有误，请检查！");
+                return;
+            }
+            MethodModel methodModel = (MethodModel) urlMapping.get(handleUrl);
+            Method method = methodModel.getMethod();
+            Object controller = methodModel.getController();
+            Map<String,ParamModel> paramMap = methodModel.getParamMap();
+            Map parameterMap = req.getParameterMap();
+
+            Object[] paramObject = new Object[paramMap.size()];
+            int index = 0;
+            for (Map.Entry<String, ParamModel> entry : paramMap.entrySet()) {
+                String key = entry.getKey();
+                ParamModel paramModel = entry.getValue();
+                paramObject[index++] = parameterMap.get(key);
+            }
+
+            Object result = null;
+            if (MapUtils.isNotEmpty(parameterMap)){
+                result = method.invoke(controller,parameterMap.get("name"),parameterMap.get("pwd"));
+            }else {
+                result = method.invoke(controller);
+            }
+
+            Json json = new Json();
+            json.setSuccessValue(result);
+            resp.getWriter().print(json);
+        }catch(Exception e){
+            e.printStackTrace();
+        }
     }
 
 
+    /**
+     * 加载配置文件
+     * @param location
+     */
     private void doLoadConfig(String location) {
 
         InputStream in = this.getClass().getClassLoader().getResourceAsStream(location.split(":")[1]);
@@ -80,6 +132,10 @@ public class ReDispatcherServlet extends HttpServlet {
 
     }
 
+    /**
+     * 扫描包
+     * @param packageName
+     */
     private void doScanner(String packageName) {
 
         //扫描配置的包名，获取该包下所有的类
@@ -95,17 +151,40 @@ public class ReDispatcherServlet extends HttpServlet {
         }
     }
 
+    /**
+     * 初始化ioc容器
+     */
     private void doInstance() {
-        if (CollectionUtils.isNotEmpty(classNameSet)){
+        if (CollectionUtils.isEmpty(classNameSet)){
             return;
         }
 
         for (String className : classNameSet) {
             try{
+
                 Class<?> clazz = Class.forName(className);
+                //forName方法会触发static方法，没有loadClass()方法干净
+                //Class<?> clazz = Class.class.getClassLoader().loadClass(className);
                 if (clazz.isAnnotationPresent(ReController.class)){
                     String beanName = toLowFirstChar(clazz.getSimpleName());
-                }else if(clazz.isAnnotationPresent(ReAutoWired.class)){
+                    ioc.put(beanName,clazz.newInstance());
+                }else if(clazz.isAnnotationPresent(ReService.class)){
+                    //如果有别名
+                    ReService service = clazz.getAnnotation(ReService.class);
+                    Class<?>[] interfaces = clazz.getInterfaces();
+                    Object instance = clazz.newInstance();
+                    //不是接口的实现
+                    String beanName = service.value();
+                    if ("".equals(beanName)) {
+                        //没有设置别名
+                        beanName = toLowFirstChar(clazz.getSimpleName());
+                    }
+                    ioc.put(beanName, instance);
+
+                    //如果是接口的实现
+                    for (Class<?> interfaceName : interfaces) {
+                        ioc.put(toLowFirstChar(interfaceName.getSimpleName().substring(1)), instance);
+                    }
 
                 }else {
                     continue;
@@ -116,9 +195,11 @@ public class ReDispatcherServlet extends HttpServlet {
         }
     }
 
-
+    /**
+     * 注入对象
+     */
     private void doReAutoWired() {
-        
+
         if(MapUtils.isEmpty(ioc)){
             return;
         }
@@ -136,19 +217,95 @@ public class ReDispatcherServlet extends HttpServlet {
                     //允许修改私用成员变量的值
                     field.setAccessible(true);
                     try {
-                        field.set(field.getName(),ioc.get(beanName));
+                        field.set(entry.getValue(),ioc.get(beanName));
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
+                }else {
+                    continue;
                 }
+            }
+        }
+
+    }
+
+    private void initHandlerMapping() {
+        if (ioc.isEmpty()){
+            return;
+        }
+
+        for (Map.Entry<String, Object> entry : ioc.entrySet()) {
+            Class<?> clazz = entry.getValue().getClass();
+            if (!clazz.isAnnotationPresent(ReRequestMapping.class)){
+                continue;
+            }
+            StringBuffer requestUrl = new StringBuffer();
+            requestUrl.append("/");
+            String reqUrl = clazz.getAnnotation(ReRequestMapping.class).value();
+
+            Method[] methods = clazz.getMethods();
+            for (Method method : methods) {
+                if (!method.isAnnotationPresent(ReRequestMapping.class)){
+                    continue;
+                }
+                String methodUrl = method.getAnnotation(ReRequestMapping.class).value();
+                requestUrl.append("/").append(reqUrl).append("/").append(methodUrl);
+                String url = requestUrl.toString().replaceAll("//","/");
+                requestUrl.setLength(0);
+
+                //找到方法，controller，参数
+                MethodModel methodModel = new MethodModel();
+                methodModel.setMethod(method);
+                methodModel.setController(entry.getValue());
+
+                Map<String,ParamModel> paramModelMap = bulidParamMap(method);
+                methodModel.setParamMap(paramModelMap);
+                urlMapping.put(url,methodModel);
             }
         }
     }
 
-    private void initHandlerMapping() {
+    private Map<String, ParamModel> bulidParamMap(Method method) {
+        Map<String, ParamModel> paramModelMap = new HashMap<String, ParamModel>();
+
+        Parameter[] parameters = method.getParameters();
+        if (parameters.length > 0){
+            ParamModel paramModel = null;
+            for (Parameter param : parameters) {
+                if (param.isAnnotationPresent(ReRequestParam.class)) {
+                    ReRequestParam reRequestParam = param.getAnnotation(ReRequestParam.class);
+                    String value = reRequestParam.value();
+                    Boolean require = reRequestParam.required();
+                    Class<?> paramType = param.getType();
+                    String paramName = param.getName();
+
+                    paramModel = new ParamModel(paramName,value,require,paramType);
+                    if ("".equals(value)) {
+                        paramModelMap.put(paramName,paramModel);
+                    }else {
+                        paramModelMap.put(value,paramModel);
+                    }
+
+                }else {
+                    continue;
+                }
+            }
+        }
+
+        return paramModelMap;
     }
 
+    /**
+     * 首字母小写
+     * @param simpleName
+     * @return
+     */
     private String toLowFirstChar(String simpleName) {
-        return null;
+        if (null == simpleName && "" == simpleName){
+            return simpleName;
+        }
+        char[] chars = simpleName.trim().toCharArray();
+        chars[0] = (char)((int)chars[0] + 32);
+        return String.valueOf(chars);
     }
 }
